@@ -10,7 +10,7 @@
   <style>
     :root {
       --bg-space: #070a10;
-      --bg-panel: rgba(13, 19, 32, 0.94);
+      --bg-panel: rgba(13, 19, 32, 0.95);
       --bg-card: #0d1422;
       --border-hud: rgba(0, 240, 255, 0.25);
       --cyan-neon: #00f0ff;
@@ -114,6 +114,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 0.5rem;
     }
     #consoleText { color: var(--cyan-neon); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
@@ -180,7 +181,7 @@
 
     .card-photo-wrapper {
       position: relative;
-      height: 145px;
+      height: 120px;
       background: #03060c;
       display: flex;
       align-items: center;
@@ -193,13 +194,7 @@
       width: 100%; height: 100%;
       background: radial-gradient(circle, #0e172a 0%, #060911 100%);
     }
-    .silhouette-fallback svg { width: 50px; height: 50px; fill: var(--border-hud); }
-
-    .photo-attribution {
-      position: absolute; bottom: 3px; right: 5px; font-size: 0.58rem;
-      font-family: var(--font-mono); background: rgba(0, 0, 0, 0.75);
-      padding: 1px 4px; border-radius: 2px; color: #aaa;
-    }
+    .silhouette-fallback svg { width: 46px; height: 46px; fill: var(--border-hud); }
 
     .card-main { padding: 0.85rem; display: flex; flex-direction: column; gap: 0.6rem; flex: 1; }
     
@@ -212,6 +207,13 @@
       font-family: var(--font-mono); font-size: 0.72rem; color: var(--amber-neon);
       background: rgba(255, 170, 0, 0.12); padding: 0.1rem 0.35rem; border-radius: 2px;
     }
+    .route-badge {
+      font-size: 0.8rem;
+      color: var(--cyan-neon);
+      font-family: var(--font-mono);
+      font-weight: 600;
+    }
+
     .aircraft-type-desc {
       font-size: 0.78rem; color: var(--text-muted); font-family: var(--font-mono);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -264,9 +266,10 @@
       </div>
     </div>
 
+    <!-- Active Status Log -->
     <div id="hudConsole">
-      <span id="consoleText">Connecting to flight relay...</span>
-      <span id="activeSource" style="color:var(--text-muted); font-size:0.65rem;">CORS BRIDGE</span>
+      <span id="consoleText">Booting radar...</span>
+      <span id="activeSource" style="color:var(--text-muted); font-size:0.65rem;">INITIALIZING</span>
     </div>
 
     <div class="controls-strip">
@@ -279,8 +282,8 @@
       </div>
 
       <div class="control-group">
-        <label for="radiusRange">Rad: <span id="radiusVal">80</span> NM</label>
-        <input type="range" id="radiusRange" min="20" max="200" step="10" value="80">
+        <label for="radiusRange">Rad: <span id="radiusVal">75</span> NM</label>
+        <input type="range" id="radiusRange" min="20" max="250" step="10" value="75">
       </div>
 
       <div class="control-group">
@@ -303,7 +306,7 @@
     <div id="aircraftGrid" class="grid-container">
       <div class="empty-hud">
         <h2>SCANNING AIRSPACE...</h2>
-        <p>Polling live ADS-B network via bridge.</p>
+        <p>Connecting to global aviation feed...</p>
       </div>
     </div>
   </main>
@@ -312,11 +315,10 @@
     const state = {
       userLat: 52.9225,
       userLon: -1.4746,
-      radiusNm: 80,
+      radiusNm: 75,
       sortBy: 'distance',
-      pollIntervalMs: 8000,
-      aircraftMap: new Map(),
-      photoCache: new Map()
+      pollIntervalMs: 6000,
+      aircraftMap: new Map()
     };
 
     const elements = {
@@ -380,7 +382,7 @@
             syncInputs();
             fetchFeed();
           },
-          { enableHighAccuracy: true, timeout: 6000 }
+          { enableHighAccuracy: true, timeout: 5000 }
         );
       } else {
         syncInputs();
@@ -388,117 +390,148 @@
       }
     }
 
-    async function fetchPhoto(hex) {
-      if (state.photoCache.has(hex)) return state.photoCache.get(hex);
-      try {
-        const res = await fetch(`https://api.planespotters.net/pub/photos/hex/${hex}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.photos && data.photos.length > 0) {
-            const p = data.photos[0];
-            const info = {
-              thumbnail: p.thumbnail_large?.src || p.thumbnail?.src,
-              photographer: p.photographer
-            };
-            state.photoCache.set(hex, info);
-            return info;
-          }
-        }
-      } catch (e) {}
-      state.photoCache.set(hex, null);
-      return null;
-    }
-
-    // CORS-proof Multi-Proxy Pipeline
+    // Direct Browser-Compatible Multi-Feed Engine
     async function fetchFeed() {
       elements.heartbeatDot.classList.add('pulsing');
       setTimeout(() => elements.heartbeatDot.classList.remove('pulsing'), 300);
 
-      const lat = state.userLat.toFixed(4);
-      const lon = state.userLon.toFixed(4);
-      const rad = Math.min(Math.max(Number(state.radiusNm), 10), 200);
+      const lat = state.userLat;
+      const lon = state.userLon;
+      const rad = state.radiusNm;
 
-      const targetEndpoint = `https://api.airplanes.live/v2/point/${lat}/${lon}/${rad}`;
+      // Degree delta: 1 deg lat ≈ 60 NM
+      const latDelta = (rad / 60) * 1.05;
+      const lonDelta = (rad / (60 * Math.cos(lat * Math.PI / 180))) * 1.05;
 
-      const bridges = [
+      const bounds = {
+        north: (lat + latDelta).toFixed(4),
+        south: (lat - latDelta).toFixed(4),
+        west: (lon - lonDelta).toFixed(4),
+        east: (lon + lonDelta).toFixed(4)
+      };
+
+      // Two fully open browser endpoints
+      const endpoints = [
         {
-          name: 'Bridge 1',
-          url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetEndpoint)}`,
-          parser: (d) => d.ac || []
+          name: 'FlightRadar Direct',
+          url: `https://data-cloud.flightradar24.com/zones/fcgi/feed.js?bounds=${bounds.north},${bounds.south},${bounds.west},${bounds.east}&faa=1&satellite=1&mlat=1&flarm=1&adsb=1&gnd=1&air=1&vehicles=0&estimated=1&maxage=14400&gliders=0&stats=0`,
+          parser: parseFlightRadar
         },
         {
-          name: 'Bridge 2',
-          url: `https://api.allorigins.win/raw?url=${encodeURIComponent(targetEndpoint)}`,
-          parser: (d) => d.ac || []
+          name: 'ADS-B One',
+          url: `https://opendata.adsb.fi/api/v2/lat/${lat.toFixed(4)}/lon/${lon.toFixed(4)}/dist/${rad}`,
+          parser: parseAdsbFi
         }
       ];
 
-      let rawAircraft = null;
-      let activeBridgeName = '';
+      let aircraftList = null;
+      let activeSourceName = '';
 
-      for (const bridge of bridges) {
+      for (const ep of endpoints) {
         try {
           const controller = new AbortController();
           const timer = setTimeout(() => controller.abort(), 6000);
-
-          const res = await fetch(bridge.url, { signal: controller.signal });
+          
+          const res = await fetch(ep.url, { signal: controller.signal });
           clearTimeout(timer);
 
           if (!res.ok) continue;
 
           const data = await res.json();
-          const parsed = bridge.parser(data);
-          if (Array.isArray(parsed)) {
-            rawAircraft = parsed;
-            activeBridgeName = bridge.name;
+          aircraftList = ep.parser(data);
+          
+          if (Array.isArray(aircraftList) && aircraftList.length > 0) {
+            activeSourceName = ep.name;
             break;
           }
         } catch (err) {
-          // Cascade to next bridge
+          // Fall through to next endpoint
         }
       }
 
-      if (!rawAircraft) {
-        log('Connecting through backup node... will retry in 8s', 'var(--amber-neon)');
+      if (!aircraftList || aircraftList.length === 0) {
+        log(`No active contacts within ${rad} NM.`, 'var(--cyan-neon)');
+        renderEmpty();
         return;
       }
 
-      elements.activeSource.textContent = activeBridgeName;
-      log(`Connected: tracking ${rawAircraft.length} aircraft overhead.`);
-      processAircraft(rawAircraft);
+      elements.activeSource.textContent = activeSourceName.toUpperCase();
+      log(`Connected to ${activeSourceName}: ${aircraftList.length} flights tracked.`);
+      processAircraft(aircraftList);
     }
 
-    function processAircraft(list) {
-      state.aircraftMap.clear();
+    // Parser for Flightradar24 format
+    function parseFlightRadar(data) {
+      const results = [];
+      for (const key in data) {
+        if (!data.hasOwnProperty(key)) continue;
+        const item = data[key];
+        // Flightradar24 array structure:
+        // [0] hex, [1] lat, [2] lon, [3] track, [4] alt, [5] speed, [8] aircraft_model, [9] reg, [11] origin, [12] dest, [13] callsign, [15] vrate
+        if (Array.isArray(item) && item.length >= 14) {
+          const lat = item[1];
+          const lon = item[2];
+          const distance = calculateDistanceNm(state.userLat, state.userLon, lat, lon);
 
-      list.forEach(ac => {
-        const hex = (ac.hex || '').trim().toLowerCase();
-        const lat = ac.lat !== undefined ? ac.lat : (ac.lastPosition ? ac.lastPosition.lat : undefined);
-        const lon = ac.lon !== undefined ? ac.lon : (ac.lastPosition ? ac.lastPosition.lon : undefined);
-        if (!hex || lat === undefined || lon === undefined) return;
+          if (distance <= state.radiusNm) {
+            results.push({
+              hex: (item[0] || key).toLowerCase(),
+              flight: (item[13] || item[16] || item[9] || 'NO CALLSIGN').trim(),
+              type: item[8] ? `${item[8]} (${item[9] || ''})` : 'Commercial / General Aviation',
+              route: (item[11] && item[12]) ? `${item[11]} → ${item[12]}` : null,
+              alt_baro: Number(item[4]) || 0,
+              gs: Number(item[5]) || 0,
+              track: Number(item[3]) || 0,
+              baro_rate: Number(item[15]) || 0,
+              distance: distance
+            });
+          }
+        }
+      }
+      return results;
+    }
+
+    // Parser for ADS-B format
+    function parseAdsbFi(data) {
+      const list = data.aircraft || data.ac || [];
+      return list.map(ac => {
+        const hex = (ac.hex || '').toLowerCase();
+        const lat = ac.lat !== undefined ? ac.lat : ac.last_lat;
+        const lon = ac.lon !== undefined ? ac.lon : ac.last_lon;
+        if (!hex || lat === undefined || lon === undefined) return null;
 
         const distance = calculateDistanceNm(state.userLat, state.userLon, lat, lon);
-        if (distance > state.radiusNm) return;
+        if (distance > state.radiusNm) return null;
 
-        state.aircraftMap.set(hex, {
+        return {
           hex,
           flight: (ac.flight || ac.r || 'NO CALLSIGN').trim(),
-          type: ac.t || ac.desc || 'General Aviation / Commercial',
+          type: ac.t || ac.desc || 'General Aviation',
+          route: null,
           alt_baro: ac.alt_baro === 'ground' ? 0 : (Number(ac.alt_baro) || 0),
           gs: Number(ac.gs) || 0,
           track: Number(ac.track) || 0,
           baro_rate: Number(ac.baro_rate) || 0,
           distance: distance
-        });
+        };
+      }).filter(Boolean);
+    }
 
-        if (!state.photoCache.has(hex)) {
-          fetchPhoto(hex).then(photo => {
-            if (photo) updateCardPhoto(hex, photo);
-          });
-        }
-      });
-
+    function processAircraft(list) {
+      state.aircraftMap.clear();
+      list.forEach(ac => state.aircraftMap.set(ac.hex, ac));
       render();
+    }
+
+    function renderEmpty() {
+      elements.statCount.textContent = '0';
+      elements.grid.innerHTML = `
+        <div class="empty-hud">
+          <h2>NO AIRCRAFT IN SECTOR</h2>
+          <p>Scanning ${state.radiusNm} NM around ${state.userLat.toFixed(2)}°, ${state.userLon.toFixed(2)}°.</p>
+          <p style="margin-top:0.6rem; color:var(--cyan-neon);">Widen the radius slider to 100+ NM to catch higher flyovers.</p>
+        </div>
+      `;
     }
 
     function render() {
@@ -514,13 +547,7 @@
       });
 
       if (list.length === 0) {
-        elements.grid.innerHTML = `
-          <div class="empty-hud">
-            <h2>NO AIRCRAFT CONTACTS IN RANGE</h2>
-            <p>Scanning ${state.radiusNm} NM around ${state.userLat.toFixed(2)}°, ${state.userLon.toFixed(2)}°.</p>
-            <p style="margin-top:0.6rem; color:var(--cyan-neon);">Widen the radius slider to 100+ NM to catch all East Midlands / Birmingham corridors.</p>
-          </div>
-        `;
+        renderEmpty();
         return;
       }
 
@@ -530,22 +557,22 @@
         card.className = 'aircraft-card';
         card.id = `ac-${ac.hex}`;
 
-        const photo = state.photoCache.get(ac.hex);
-        const photoHtml = photo 
-          ? `<img src="${photo.thumbnail}" alt="${ac.hex}"><div class="photo-attribution">© ${photo.photographer}</div>`
-          : SILHOUETTE_SVG;
-
         const vrateHtml = ac.baro_rate > 64 
           ? `<span class="vrate-climb">▲ +${ac.baro_rate} fpm</span>` 
           : (ac.baro_rate < -64 ? `<span class="vrate-descend">▼ ${ac.baro_rate} fpm</span>` : `<span class="vrate-level">LEVEL</span>`);
 
+        const routeHtml = ac.route ? `<div class="route-badge">${ac.route}</div>` : '';
+
         card.innerHTML = `
-          <div class="card-photo-wrapper" id="photo-${ac.hex}">${photoHtml}</div>
+          <div class="card-photo-wrapper">
+            ${SILHOUETTE_SVG}
+          </div>
           <div class="card-main">
             <div class="flight-identity">
               <span class="callsign">${ac.flight}</span>
               <span class="icao-hex">${ac.hex.toUpperCase()}</span>
             </div>
+            ${routeHtml}
             <div class="aircraft-type-desc">${ac.type}</div>
             <div class="telemetry-grid">
               <div class="telemetry-item">
@@ -578,16 +605,6 @@
       });
     }
 
-    function updateCardPhoto(hex, photo) {
-      const el = document.getElementById(`photo-${hex}`);
-      if (el && photo) {
-        el.innerHTML = `
-          <img src="${photo.thumbnail}" alt="${hex}">
-          <div class="photo-attribution">© ${photo.photographer}</div>
-        `;
-      }
-    }
-
     elements.radiusRange.addEventListener('input', (e) => {
       state.radiusNm = Number(e.target.value);
       elements.radiusVal.textContent = state.radiusNm;
@@ -614,7 +631,7 @@
     elements.btnGps.addEventListener('click', tryGps);
     elements.btnScanNow.addEventListener('click', fetchFeed);
 
-    // Initial load sequence
+    // Initial sequence
     syncInputs();
     fetchFeed();
     tryGps();
