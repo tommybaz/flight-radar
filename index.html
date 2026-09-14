@@ -38,7 +38,6 @@
       padding-bottom: 3rem;
     }
 
-    /* HUD Bar */
     header.hud-header {
       position: sticky;
       top: 0;
@@ -104,7 +103,6 @@
     }
     .heartbeat-dot.pulsing { transform: scale(1.6); background: #fff; }
 
-    /* On-Screen Status Line */
     #hudConsole {
       margin-top: 0.5rem;
       font-family: var(--font-mono);
@@ -119,7 +117,6 @@
     }
     #consoleText { color: var(--cyan-neon); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-    /* Controls ribbon */
     .controls-strip {
       display: flex;
       flex-wrap: wrap;
@@ -140,7 +137,7 @@
       color: #fff;
       padding: 0.35rem 0.5rem;
       font-family: var(--font-mono);
-      font-size: 16px; /* Prevents mobile Safari auto-zoom */
+      font-size: 16px;
       border-radius: 3px;
     }
 
@@ -164,7 +161,6 @@
     }
     .btn:active { background: var(--cyan-neon); color: #000; }
 
-    /* Cards Grid */
     main { max-width: 1440px; margin: 1rem auto; padding: 0 0.8rem; }
     .grid-container {
       display: grid;
@@ -254,7 +250,7 @@
 
       <div class="hud-status-strip">
         <div class="stat-item">
-          <span class="stat-label">Feed:</span>
+          <span class="stat-label">Poll:</span>
           <div id="heartbeatDot" class="heartbeat-dot"></div>
         </div>
         <div class="stat-item">
@@ -268,10 +264,10 @@
       </div>
     </div>
 
-    <!-- On-Screen Console Line -->
+    <!-- Live Status Console -->
     <div id="hudConsole">
       <span id="consoleText">Booting radar receiver...</span>
-      <span id="activeSource" style="color:var(--text-muted); font-size:0.65rem;">ADS-B DIRECT</span>
+      <span id="activeSource" style="color:var(--text-muted); font-size:0.65rem;">OPENSKY LIVE</span>
     </div>
 
     <div class="controls-strip">
@@ -284,8 +280,8 @@
       </div>
 
       <div class="control-group">
-        <label for="radiusRange">Rad: <span id="radiusVal">60</span> NM</label>
-        <input type="range" id="radiusRange" min="20" max="250" step="10" value="60">
+        <label for="radiusRange">Rad: <span id="radiusVal">75</span> NM</label>
+        <input type="range" id="radiusRange" min="20" max="150" step="10" value="75">
       </div>
 
       <div class="control-group">
@@ -308,18 +304,18 @@
     <div id="aircraftGrid" class="grid-container">
       <div class="empty-hud">
         <h2>SCANNING AIRSPACE...</h2>
-        <p>Connecting to ADS-B network receivers.</p>
+        <p>Connecting to OpenSky live network.</p>
       </div>
     </div>
   </main>
 
   <script>
     const state = {
-      userLat: 52.9225, // Derby / East Midlands Airport vicinity
+      userLat: 52.9225, // Defaulting to Derby/East Midlands
       userLon: -1.4746,
-      radiusNm: 60,
+      radiusNm: 75,
       sortBy: 'distance',
-      pollIntervalMs: 7000,
+      pollIntervalMs: 10000, // OpenSky allows unauthenticated queries every 10 seconds
       aircraftMap: new Map(),
       photoCache: new Map()
     };
@@ -381,7 +377,7 @@
             fetchFeed();
           },
           (err) => {
-            log(`Using coordinates (${err.message})`, 'var(--amber-neon)');
+            log(`Using default coordinates (${err.message})`, 'var(--amber-neon)');
             syncInputs();
             fetchFeed();
           },
@@ -414,67 +410,84 @@
       return null;
     }
 
+    // OpenSky Bounding Box Fetcher (Open CORS)
     async function fetchFeed() {
       elements.heartbeatDot.classList.add('pulsing');
       setTimeout(() => elements.heartbeatDot.classList.remove('pulsing'), 300);
 
-      const lat = state.userLat.toFixed(4);
-      const lon = state.userLon.toFixed(4);
-      const rad = Math.min(Math.max(Number(state.radiusNm), 5), 250);
+      const lat = state.userLat;
+      const lon = state.userLon;
+      const radiusNm = state.radiusNm;
 
-      const mirrors = [
-        { name: 'airplanes.live', url: `https://api.airplanes.live/v2/point/${lat}/${lon}/${rad}` },
-        { name: 'adsb.lol', url: `https://api.adsb.lol/v2/point/${lat}/${lon}/${rad}` }
-      ];
+      // Convert NM radius to approximate degree offsets (1 deg lat ~= 60 NM)
+      const latDelta = (radiusNm / 60);
+      const lonDelta = (radiusNm / (60 * Math.cos(lat * Math.PI / 180)));
 
-      let rawList = null;
-      let connectedSource = '';
+      const lamin = (lat - latDelta).toFixed(4);
+      const lamax = (lat + latDelta).toFixed(4);
+      const lomin = (lon - lonDelta).toFixed(4);
+      const lomax = (lon + lonDelta).toFixed(4);
 
-      for (const mirror of mirrors) {
-        try {
-          const res = await fetch(mirror.url);
-          if (!res.ok) continue;
+      const openSkyUrl = `https://opensky-network.org/api/states/all?lamin=${lamin}&lomin=${lomin}&lamax=${lamax}&lomax=${lomax}`;
 
-          const data = await res.json();
-          const list = data.ac || data.aircraft || [];
-          rawList = list;
-          connectedSource = mirror.name;
-          break;
-        } catch (err) {
-          // Cascade to fallback
+      log('Querying OpenSky Network...');
+
+      try {
+        const res = await fetch(openSkyUrl);
+        if (res.status === 429) {
+          log('Rate limited by OpenSky. Cooling down...', 'var(--amber-neon)');
+          return;
         }
-      }
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
 
-      if (!rawList) {
-        log('Transponder feed busy. Retrying in 7s...', 'var(--amber-neon)');
-        return;
+        const data = await res.json();
+        const rawStates = data.states || [];
+        elements.activeSource.textContent = 'OPENSKY LIVE';
+        log(`Feed Connected: ${rawStates.length} aircraft overhead.`);
+        processAircraft(rawStates);
+      } catch (err) {
+        log(`Feed Error: ${err.message}. Retrying in 10s...`, 'var(--amber-neon)');
       }
-
-      elements.activeSource.textContent = connectedSource.toUpperCase();
-      log(`Connected to ${connectedSource}: ${rawList.length} aircraft tracked.`);
-      processAircraft(rawList);
     }
 
-    function processAircraft(list) {
+    function processAircraft(states) {
       state.aircraftMap.clear();
 
-      list.forEach(ac => {
-        const hex = (ac.hex || '').trim().toLowerCase();
-        const lat = ac.lat !== undefined ? ac.lat : (ac.lastPosition ? ac.lastPosition.lat : undefined);
-        const lon = ac.lon !== undefined ? ac.lon : (ac.lastPosition ? ac.lastPosition.lon : undefined);
-        if (!hex || lat === undefined || lon === undefined) return;
+      states.forEach(s => {
+        // OpenSky vector array indices:
+        // [0] icao24, [1] callsign, [2] origin_country, [5] longitude, [6] latitude,
+        // [7] baro_altitude (meters), [8] on_ground, [9] velocity (m/s), [10] true_track, [11] vertical_rate (m/s)
+        const hex = (s[0] || '').trim().toLowerCase();
+        const callsign = (s[1] || '').trim() || 'NO CALLSIGN';
+        const country = s[2] || 'Commercial';
+        const lon = s[5];
+        const lat = s[6];
+        const onGround = s[8];
+        const baro_alt_m = s[7];
+        const velocity_ms = s[9];
+        const track = s[10] || 0;
+        const vrate_ms = s[11] || 0;
+
+        if (!hex || lat === null || lon === null) return;
 
         const distance = calculateDistanceNm(state.userLat, state.userLon, lat, lon);
         if (distance > state.radiusNm) return;
 
+        // Metric conversions
+        const alt_ft = onGround ? 0 : Math.round((baro_alt_m || 0) * 3.28084);
+        const gs_kts = Math.round((velocity_ms || 0) * 1.94384);
+        const vrate_fpm = Math.round(vrate_ms * 196.85);
+
         state.aircraftMap.set(hex, {
           hex,
-          flight: (ac.flight || ac.r || 'NO CALLSIGN').trim(),
-          type: ac.t || ac.desc || 'General Aviation',
-          alt_baro: ac.alt_baro === 'ground' ? 0 : (Number(ac.alt_baro) || 0),
-          gs: Number(ac.gs) || 0,
-          track: Number(ac.track) || 0,
-          baro_rate: Number(ac.baro_rate) || 0,
+          flight: callsign,
+          type: country,
+          alt_baro: alt_ft,
+          gs: gs_kts,
+          track: Math.round(track),
+          baro_rate: vrate_fpm,
           distance: distance
         });
 
@@ -503,9 +516,9 @@
       if (list.length === 0) {
         elements.grid.innerHTML = `
           <div class="empty-hud">
-            <h2>NO AIRCRAFT CONTACTS IN RANGE</h2>
+            <h2>NO AIRCRAFT IN SECTOR</h2>
             <p>Scanning ${state.radiusNm} NM around ${state.userLat.toFixed(2)}°, ${state.userLon.toFixed(2)}°.</p>
-            <p style="margin-top:0.6rem; color:var(--cyan-neon);">Widen the radius slider to catch East Midlands & Birmingham traffic.</p>
+            <p style="margin-top:0.6rem; color:var(--cyan-neon);">Widen the radius slider to 100+ NM to catch all East Midlands flyovers.</p>
           </div>
         `;
         return;
@@ -601,7 +614,7 @@
     elements.btnGps.addEventListener('click', tryGps);
     elements.btnScanNow.addEventListener('click', fetchFeed);
 
-    // Boot
+    // Initial run
     syncInputs();
     fetchFeed();
     tryGps();
