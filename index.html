@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Overhead Radar HUD</title>
+  <title>AeroHUD Live</title>
   
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
   
-  <!-- Leaflet Tactical Dark Map -->
+  <!-- Leaflet Core -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
@@ -84,7 +84,27 @@
     }
     @keyframes sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-    .brand h1 { font-size: 1.05rem; letter-spacing: 0.12em; text-transform: uppercase; color: #fff; }
+    .brand-title {
+      display: flex;
+      align-items: baseline;
+      gap: 0.45rem;
+    }
+
+    .brand-title h1 {
+      font-size: 1.05rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #fff;
+    }
+
+    .brand-title .byline {
+      font-size: 0.68rem;
+      font-family: var(--font-mono);
+      color: var(--amber-neon);
+      text-transform: none;
+      letter-spacing: 0.04em;
+      opacity: 0.9;
+    }
 
     .hud-status-strip {
       display: flex; align-items: center; gap: 0.8rem;
@@ -127,35 +147,45 @@
     }
     .btn:active { background: var(--cyan-neon); color: #000; }
 
-    /* Tactical Radar Map Container */
+    /* Tactical Map Display */
     #mapContainer {
       width: 100%;
-      height: 280px;
+      height: 290px;
       position: relative;
       border-bottom: 1px solid var(--border-hud);
-      background: #05080e;
+      background: #080d1a;
     }
     @media (min-width: 900px) {
-      #mapContainer { height: 360px; }
+      #mapContainer { height: 380px; }
     }
-    #map { width: 100%; height: 100%; }
+    #map { width: 100%; height: 100%; background: #070b14; }
 
-    /* Custom Leaflet Radar Plane Marker */
-    .plane-marker-icon {
-      display: flex; align-items: center; justify-content: center;
-      transition: transform 0.4s ease-out;
+    /* Plane Marker SVG */
+    .plane-marker-wrapper {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
     }
-    .plane-marker-icon svg {
-      width: 26px; height: 26px;
+
+    .plane-svg {
+      width: 24px;
+      height: 24px;
       fill: var(--cyan-neon);
-      filter: drop-shadow(0 0 5px rgba(0, 240, 255, 0.7));
-    }
-    .plane-marker-icon.active svg {
-      fill: var(--amber-neon);
-      filter: drop-shadow(0 0 8px rgba(255, 170, 0, 0.9));
+      filter: drop-shadow(0 0 5px rgba(0, 240, 255, 0.8));
+      transition: fill 0.2s, filter 0.2s;
     }
 
-    /* Radar sweep circle pulse */
+    /* Highlighted Yellow Marker */
+    .plane-marker-wrapper.highlighted .plane-svg {
+      fill: var(--amber-neon) !important;
+      filter: drop-shadow(0 0 10px rgba(255, 170, 0, 1)) !important;
+      transform: scale(1.25);
+    }
+
+    /* User pulse */
     .user-pos-pulse {
       width: 14px; height: 14px; background: var(--cyan-neon);
       border-radius: 50%; box-shadow: 0 0 10px var(--cyan-neon);
@@ -166,7 +196,62 @@
       100% { transform: scale(2.6); opacity: 0; }
     }
 
-    /* Aircraft Cards Layout */
+    /* Map Tactical Popup */
+    .leaflet-popup-content-wrapper {
+      background: rgba(13, 20, 34, 0.95) !important;
+      border: 1px solid var(--cyan-neon) !important;
+      border-radius: 4px !important;
+      color: #fff !important;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.8) !important;
+      font-family: var(--font-hud) !important;
+      padding: 0 !important;
+    }
+    .leaflet-popup-content {
+      margin: 0.65rem 0.8rem !important;
+      line-height: 1.3 !important;
+    }
+    .leaflet-popup-tip {
+      background: rgba(13, 20, 34, 0.95) !important;
+      border: 1px solid var(--cyan-neon) !important;
+    }
+    .hud-popup-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 0.25rem;
+      margin-bottom: 0.35rem;
+    }
+    .hud-popup-body {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+    }
+    .hud-popup-body strong { color: var(--cyan-neon); }
+    .hud-popup-btn {
+      display: block;
+      width: 100%;
+      text-align: center;
+      background: rgba(0, 240, 255, 0.15);
+      border: 1px solid var(--cyan-neon);
+      color: var(--cyan-neon);
+      font-family: var(--font-hud);
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 0.3rem 0;
+      border-radius: 2px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .hud-popup-btn:active {
+      background: var(--cyan-neon);
+      color: #000;
+    }
+
+    /* Cards Layout */
     main { max-width: 1440px; margin: 1rem auto; padding: 0 0.8rem; }
     .grid-container {
       display: grid;
@@ -179,15 +264,20 @@
       border: 1px solid var(--border-hud);
       border-radius: 4px; overflow: hidden;
       display: flex; flex-direction: column;
-      position: relative; transition: border-color 0.2s, box-shadow 0.2s;
+      position: relative; transition: border-color 0.25s, box-shadow 0.25s, transform 0.2s;
+      cursor: pointer;
+    }
+    .aircraft-card:hover {
+      border-color: var(--cyan-neon);
     }
     .aircraft-card.highlighted {
-      border-color: var(--amber-neon);
-      box-shadow: 0 0 15px rgba(255, 170, 0, 0.3);
+      border-color: var(--amber-neon) !important;
+      box-shadow: 0 0 16px rgba(255, 170, 0, 0.4) !important;
+      transform: translateY(-2px);
     }
 
     .card-photo-wrapper {
-      position: relative; height: 125px; background: #03060c;
+      position: relative; height: 130px; background: #03060c;
       display: flex; align-items: center; justify-content: center;
     }
     .card-photo-wrapper img { width: 100%; height: 100%; object-fit: cover; }
@@ -217,15 +307,59 @@
       background: rgba(255, 170, 0, 0.12); padding: 0.1rem 0.35rem; border-radius: 2px;
     }
 
-    /* Route ribbon */
+    /* Enhanced Route Card Ribbon */
     .route-row {
-      display: flex; align-items: center; justify-content: space-between;
-      background: rgba(0, 240, 255, 0.05); border: 1px solid rgba(0, 240, 255, 0.15);
-      padding: 0.35rem 0.5rem; border-radius: 3px; font-family: var(--font-mono);
+      background: rgba(0, 240, 255, 0.04);
+      border: 1px solid rgba(0, 240, 255, 0.12);
+      padding: 0.45rem 0.6rem;
+      border-radius: 3px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
     }
-    .airport-code { font-weight: 700; font-size: 0.95rem; color: #fff; }
-    .route-arrow { color: var(--cyan-neon); font-size: 0.85rem; margin: 0 0.4rem; }
-    .flight-duration { font-size: 0.7rem; color: var(--text-muted); }
+    .route-airports {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .airport-box {
+      display: flex;
+      flex-direction: column;
+    }
+    .airport-box.dest { text-align: right; }
+    .airport-code {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 1rem;
+      color: #fff;
+    }
+    .airport-name {
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      color: var(--cyan-neon);
+      max-width: 120px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .route-arrow {
+      color: var(--cyan-neon);
+      font-size: 1rem;
+      opacity: 0.8;
+    }
+
+    .flight-duration-bar {
+      display: flex;
+      justify-content: space-between;
+      border-top: 1px dashed rgba(255, 255, 255, 0.08);
+      padding-top: 0.3rem;
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--text-muted);
+    }
+    .flight-duration-bar span strong {
+      color: var(--amber-neon);
+    }
 
     .aircraft-type-desc {
       font-size: 0.76rem; color: var(--text-muted); font-family: var(--font-mono);
@@ -260,7 +394,10 @@
     <div class="hud-top-bar">
       <div class="brand">
         <div class="radar-sweep-icon"></div>
-        <h1>AeroHUD Live</h1>
+        <div class="brand-title">
+          <h1>AeroHUD Live</h1>
+          <span class="byline">by Tom</span>
+        </div>
       </div>
 
       <div class="hud-status-strip">
@@ -309,12 +446,12 @@
     </div>
   </header>
 
-  <!-- Live Tactical Radar Map -->
+  <!-- Clean Dark Map -->
   <div id="mapContainer">
     <div id="map"></div>
   </div>
 
-  <!-- Cards Grid -->
+  <!-- Telemetry Card Grid -->
   <main>
     <div id="aircraftGrid" class="grid-container">
       <div class="empty-hud">
@@ -327,6 +464,89 @@
   <script>
     const WORKER_URL = "https://light-proxy.tommybaz.workers.dev";
 
+    // Common airport names dictionary for IATA code lookup
+    const AIRPORTS = {
+      // UK & Ireland
+      'EMA': { name: 'East Midlands', lat: 52.831, lon: -1.328 },
+      'BHX': { name: 'Birmingham', lat: 52.454, lon: -1.748 },
+      'MAN': { name: 'Manchester', lat: 53.354, lon: -2.275 },
+      'LHR': { name: 'London Heathrow', lat: 51.470, lon: -0.454 },
+      'LGW': { name: 'London Gatwick', lat: 51.154, lon: -0.182 },
+      'STN': { name: 'London Stansted', lat: 51.886, lon: 0.239 },
+      'LTN': { name: 'London Luton', lat: 51.875, lon: -0.368 },
+      'LCY': { name: 'London City', lat: 51.505, lon: 0.055 },
+      'DSA': { name: 'Doncaster Sheffield', lat: 53.475, lon: -1.004 },
+      'LBA': { name: 'Leeds Bradford', lat: 53.866, lon: -1.661 },
+      'LPL': { name: 'Liverpool John Lennon', lat: 53.334, lon: -2.850 },
+      'NCL': { name: 'Newcastle', lat: 55.038, lon: -1.692 },
+      'EDI': { name: 'Edinburgh', lat: 55.950, lon: -3.373 },
+      'GLA': { name: 'Glasgow', lat: 55.872, lon: -4.433 },
+      'ABZ': { name: 'Aberdeen', lat: 57.202, lon: -2.198 },
+      'BFS': { name: 'Belfast International', lat: 54.658, lon: -6.216 },
+      'BHD': { name: 'George Best Belfast', lat: 54.618, lon: -5.873 },
+      'DUB': { name: 'Dublin', lat: 53.421, lon: -6.270 },
+      'SNN': { name: 'Shannon', lat: 52.702, lon: -8.925 },
+      'ORK': { name: 'Cork', lat: 51.841, lon: -8.491 },
+      'BRS': { name: 'Bristol', lat: 51.383, lon: -2.719 },
+      'CWL': { name: 'Cardiff', lat: 51.397, lon: -3.343 },
+      'SOU': { name: 'Southampton', lat: 50.950, lon: -1.357 },
+      'EXT': { name: 'Exeter', lat: 50.734, lon: -3.414 },
+      'NWI': { name: 'Norwich', lat: 52.676, lon: 1.283 },
+      // Europe
+      'CDG': { name: 'Paris Charles de Gaulle', lat: 49.009, lon: 2.556 },
+      'ORY': { name: 'Paris Orly', lat: 48.726, lon: 2.365 },
+      'AMS': { name: 'Amsterdam Schiphol', lat: 52.310, lon: 4.768 },
+      'FRA': { name: 'Frankfurt am Main', lat: 50.038, lon: 8.562 },
+      'MUC': { name: 'Munich', lat: 48.354, lon: 11.786 },
+      'BER': { name: 'Berlin Brandenburg', lat: 52.367, lon: 13.503 },
+      'MAD': { name: 'Madrid Barajas', lat: 40.484, lon: -3.568 },
+      'BCN': { name: 'Barcelona El Prat', lat: 41.297, lon: 2.078 },
+      'AGP': { name: 'Málaga', lat: 36.675, lon: -4.499 },
+      'ALC': { name: 'Alicante', lat: 38.282, lon: -0.558 },
+      'PMI': { name: 'Palma de Mallorca', lat: 39.552, lon: 2.739 },
+      'IBZ': { name: 'Ibiza', lat: 38.873, lon: 1.373 },
+      'TFS': { name: 'Tenerife South', lat: 28.044, lon: -16.572 },
+      'LPA': { name: 'Gran Canaria', lat: 27.932, lon: -15.387 },
+      'FAO': { name: 'Faro Algarve', lat: 37.014, lon: -7.966 },
+      'LIS': { name: 'Lisbon Portela', lat: 38.774, lon: -9.134 },
+      'FCO': { name: 'Rome Fiumicino', lat: 41.800, lon: 12.239 },
+      'MXP': { name: 'Milan Malpensa', lat: 45.630, lon: 8.723 },
+      'VCE': { name: 'Venice Marco Polo', lat: 45.505, lon: 12.352 },
+      'ZRH': { name: 'Zurich', lat: 47.458, lon: 8.555 },
+      'VIE': { name: 'Vienna', lat: 48.110, lon: 16.570 },
+      'CPH': { name: 'Copenhagen', lat: 55.618, lon: 12.651 },
+      'OSL': { name: 'Oslo Gardermoen', lat: 60.198, lon: 11.100 },
+      'ARN': { name: 'Stockholm Arlanda', lat: 59.649, lon: 17.919 },
+      'HEL': { name: 'Helsinki Vantaa', lat: 60.317, lon: 24.963 },
+      'ATH': { name: 'Athens Eleftherios', lat: 37.936, lon: 23.944 },
+      'HER': { name: 'Heraklion Crete', lat: 35.340, lon: 25.180 },
+      'RHO': { name: 'Rhodes Diagoras', lat: 36.405, lon: 28.086 },
+      'LCA': { name: 'Larnaca', lat: 34.875, lon: 33.625 },
+      'PFO': { name: 'Paphos', lat: 34.718, lon: 32.486 },
+      'IST': { name: 'Istanbul Airport', lat: 41.275, lon: 28.752 },
+      'SAW': { name: 'Istanbul Sabiha', lat: 40.898, lon: 29.309 },
+      'AYT': { name: 'Antalya', lat: 36.899, lon: 30.801 },
+      'DLM': { name: 'Dalaman', lat: 36.713, lon: 28.792 },
+      'BJV': { name: 'Bodrum Milas', lat: 37.251, lon: 27.664 },
+      // North America & Transatlantic
+      'JFK': { name: 'New York JFK', lat: 40.641, lon: -73.778 },
+      'EWR': { name: 'New York Newark', lat: 40.690, lon: -74.175 },
+      'BOS': { name: 'Boston Logan', lat: 42.365, lon: -71.010 },
+      'ORD': { name: 'Chicago O\'Hare', lat: 41.974, lon: -87.907 },
+      'MCO': { name: 'Orlando International', lat: 28.431, lon: -81.308 },
+      'MIA': { name: 'Miami International', lat: 25.795, lon: -80.287 },
+      'TPA': { name: 'Tampa International', lat: 27.975, lon: -82.533 },
+      'ATL': { name: 'Atlanta Hartsfield', lat: 33.640, lon: -84.428 },
+      'LAX': { name: 'Los Angeles Intl', lat: 33.942, lon: -118.408 },
+      'SFO': { name: 'San Francisco Intl', lat: 37.619, lon: -122.375 },
+      'YYZ': { name: 'Toronto Pearson', lat: 43.677, lon: -79.625 },
+      // Middle East & Asia
+      'DXB': { name: 'Dubai International', lat: 25.253, lon: 55.364 },
+      'DOH': { name: 'Doha Hamad', lat: 25.273, lon: 51.608 },
+      'AUH': { name: 'Abu Dhabi', lat: 24.433, lon: 54.651 },
+      'SIN': { name: 'Singapore Changi', lat: 1.364, lon: 103.991 }
+    };
+
     const state = {
       userLat: 52.9225,
       userLon: -1.4746,
@@ -335,6 +555,8 @@
       pollIntervalMs: 6000,
       aircraftMap: new Map(),
       photoCache: new Map(),
+      flightFirstSeen: new Map(), // hex -> timestamp for flight time tracking
+      activeHex: null, // Currently selected plane
       map: null,
       planeMarkers: new Map(),
       userMarker: null,
@@ -363,7 +585,7 @@
       </div>
     `;
 
-    // Initialize Map with dark tiles
+    // Initialize Map with Watermark-Free OpenStreetMap Dark Filter Tiles
     function initMap() {
       state.map = L.map('map', {
         center: [state.userLat, state.userLon],
@@ -372,10 +594,17 @@
         attributionControl: false
       });
 
-      // CartoDB Dark Matter tile layer
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        maxZoom: 14,
+      // Completely open, free Dark-Styled OpenStreetMap tiles (No API key, No watermarks)
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png', {
+        maxZoom: 18,
         subdomains: 'abcd'
+      }).addTo(state.map);
+
+      // Add subtle dark road/city label overlay
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}.png', {
+        maxZoom: 18,
+        subdomains: 'abcd',
+        opacity: 0.65
       }).addTo(state.map);
 
       updateMapCenter();
@@ -385,7 +614,6 @@
       if (!state.map) return;
       state.map.setView([state.userLat, state.userLon], state.map.getZoom());
 
-      // User location marker
       if (state.userMarker) state.userMarker.remove();
       const userIcon = L.divIcon({
         className: 'user-pos-pulse',
@@ -394,7 +622,6 @@
       });
       state.userMarker = L.marker([state.userLat, state.userLon], { icon: userIcon }).addTo(state.map);
 
-      // Radius coverage circle
       if (state.coverageCircle) state.coverageCircle.remove();
       const radiusMeters = state.radiusNm * 1852;
       state.coverageCircle = L.circle([state.userLat, state.userLon], {
@@ -407,18 +634,22 @@
       }).addTo(state.map);
     }
 
-    // Proximity, Bearing, and Direction helper
-    function calculateBearingAndDistance(lat1, lon1, lat2, lon2) {
-      const R = 3440.065; // Nautical miles
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      const R = 3440.065;
       const φ1 = lat1 * Math.PI / 180;
       const φ2 = lat2 * Math.PI / 180;
       const Δφ = (lat2 - lat1) * Math.PI / 180;
       const Δλ = (lon2 - lon1) * Math.PI / 180;
-
       const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
                 Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      const distance = R * c;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+
+    function calculateBearingAndDistance(lat1, lon1, lat2, lon2) {
+      const distance = calculateDistance(lat1, lon1, lat2, lon2);
+      const φ1 = lat1 * Math.PI / 180;
+      const φ2 = lat2 * Math.PI / 180;
+      const Δλ = (lon2 - lon1) * Math.PI / 180;
 
       const y = Math.sin(Δλ) * Math.cos(φ2);
       const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
@@ -429,6 +660,65 @@
       const compass = directions[Math.round(bearing / 22.5) % 16];
 
       return { distance, bearing: Math.round(bearing), compass };
+    }
+
+    // Lookup airport metadata
+    function getAirportMeta(code) {
+      if (!code) return { name: 'Unknown Airport', lat: null, lon: null };
+      const upper = code.trim().toUpperCase();
+      if (AIRPORTS[upper]) {
+        return AIRPORTS[upper];
+      }
+      return { name: upper + ' Airport', lat: null, lon: null };
+    }
+
+    // Estimate flight duration & remaining time
+    function estimateFlightTimes(ac) {
+      const now = Date.now();
+      if (!state.flightFirstSeen.has(ac.hex)) {
+        state.flightFirstSeen.set(ac.hex, now);
+      }
+      const firstSeen = state.flightFirstSeen.get(ac.hex);
+
+      let elapsedText = null;
+      let remainingText = null;
+
+      // Check if we have coordinate data for origin & destination
+      const originMeta = getAirportMeta(ac.origin);
+      const destMeta = getAirportMeta(ac.dest);
+
+      if (originMeta.lat && destMeta.lat && ac.gs > 80) {
+        // Distance from current position to destination
+        const distToDest = calculateDistance(ac.lat, ac.lon, destMeta.lat, destMeta.lon);
+        const hoursRemaining = distToDest / ac.gs;
+        const totalMinRemaining = Math.round(hoursRemaining * 60);
+
+        if (totalMinRemaining > 0) {
+          const remHours = Math.floor(totalMinRemaining / 60);
+          const remMins = totalMinRemaining % 60;
+          remainingText = remHours > 0 ? `${remHours}h ${remMins}m` : `${remMins}m`;
+        } else {
+          remainingText = 'Arriving';
+        }
+
+        // Distance from origin to current position
+        const distFromOrigin = calculateDistance(originMeta.lat, originMeta.lon, ac.lat, ac.lon);
+        const hoursElapsed = distFromOrigin / ac.gs;
+        const totalMinElapsed = Math.round(hoursElapsed * 60);
+        if (totalMinElapsed > 0) {
+          const elHours = Math.floor(totalMinElapsed / 60);
+          const elMins = totalMinElapsed % 60;
+          elapsedText = elHours > 0 ? `${elHours}h ${elMins}m` : `${elMins}m`;
+        }
+      }
+
+      // Fallback to local session tracking if origin/dest GPS is unknown
+      if (!elapsedText) {
+        const trackedMinutes = Math.floor((now - firstSeen) / 60000);
+        elapsedText = trackedMinutes > 1 ? `${trackedMinutes}m (in radar)` : 'Just entered sector';
+      }
+
+      return { elapsedText, remainingText };
     }
 
     function syncInputs() {
@@ -507,6 +797,8 @@
         const rel = calculateBearingAndDistance(state.userLat, state.userLon, ac.lat, ac.lon);
         if (rel.distance > state.radiusNm) return;
 
+        const times = estimateFlightTimes(ac);
+
         state.aircraftMap.set(hex, {
           hex,
           flight: ac.flight || 'NO CALLSIGN',
@@ -517,6 +809,10 @@
           baro_rate: ac.baro_rate || 0,
           origin: ac.origin,
           dest: ac.dest,
+          originName: getAirportMeta(ac.origin).name,
+          destName: getAirportMeta(ac.dest).name,
+          elapsedText: times.elapsedText,
+          remainingText: times.remainingText,
           lat: ac.lat,
           lon: ac.lon,
           distance: rel.distance,
@@ -535,6 +831,7 @@
       syncMapMarkers();
     }
 
+    // Sync Leaflet map markers with two-way highlight logic
     function syncMapMarkers() {
       if (!state.map) return;
 
@@ -542,34 +839,53 @@
 
       state.aircraftMap.forEach(ac => {
         activeHexes.add(ac.hex);
+        const isSelected = state.activeHex === ac.hex;
 
         let marker = state.planeMarkers.get(ac.hex);
         const iconHtml = `
-          <div class="plane-marker-icon" id="marker-${ac.hex}" style="transform: rotate(${ac.track}deg);">
-            <svg viewBox="0 0 24 24"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
+          <div class="plane-marker-wrapper ${isSelected ? 'highlighted' : ''}" id="marker-${ac.hex}">
+            <svg class="plane-svg" style="transform: rotate(${ac.track}deg);" viewBox="0 0 24 24">
+              <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
+            </svg>
           </div>
         `;
 
         const divIcon = L.divIcon({
           className: '',
           html: iconHtml,
-          iconSize: [26, 26],
-          iconAnchor: [13, 13]
+          iconSize: [28, 28],
+          iconAnchor: [14, 14]
         });
+
+        const popupContent = `
+          <div class="hud-popup-title">
+            <span>${ac.flight}</span>
+            <span style="color:var(--amber-neon);">${ac.hex.toUpperCase()}</span>
+          </div>
+          <div class="hud-popup-body">
+            <div>Route: <strong>${ac.origin || '---'} ➔ ${ac.dest || '---'}</strong></div>
+            <div>Model: ${ac.type}</div>
+            <div>Altitude: <strong>${ac.alt_baro.toLocaleString()} ft</strong></div>
+            <div>Speed: <strong>${ac.gs} kts</strong> • Distance: <strong>${ac.distance.toFixed(1)} NM</strong></div>
+          </div>
+          <button class="hud-popup-btn" onclick="selectPlane('${ac.hex}', true)">VIEW TELEMETRY CARD ↓</button>
+        `;
 
         if (marker) {
           marker.setLatLng([ac.lat, ac.lon]);
           marker.setIcon(divIcon);
+          marker.setPopupContent(popupContent);
         } else {
           marker = L.marker([ac.lat, ac.lon], { icon: divIcon }).addTo(state.map);
+          marker.bindPopup(popupContent, { offset: [0, -10] });
           marker.on('click', () => {
-            highlightCard(ac.hex);
+            selectPlane(ac.hex, false);
           });
           state.planeMarkers.set(ac.hex, marker);
         }
       });
 
-      // Remove stale markers
+      // Cleanup departed planes
       state.planeMarkers.forEach((marker, hex) => {
         if (!activeHexes.has(hex)) {
           marker.remove();
@@ -578,14 +894,31 @@
       });
     }
 
-    function highlightCard(hex) {
+    // Two-way Selection Handler: Highlights Marker (Yellow) and Card
+    window.selectPlane = function(hex, scrollToCard = true) {
+      state.activeHex = hex;
+
+      // Update Map Marker classes
+      document.querySelectorAll('.plane-marker-wrapper').forEach(el => el.classList.remove('highlighted'));
+      const activeEl = document.getElementById(`marker-${hex}`);
+      if (activeEl) activeEl.classList.add('highlighted');
+
+      // Update Card classes
       document.querySelectorAll('.aircraft-card').forEach(c => c.classList.remove('highlighted'));
       const card = document.getElementById(`ac-${hex}`);
       if (card) {
         card.classList.add('highlighted');
-        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (scrollToCard) {
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
       }
-    }
+
+      // Pan map smoothly to plane
+      const ac = state.aircraftMap.get(hex);
+      if (ac && state.map) {
+        state.map.panTo([ac.lat, ac.lon], { animate: true, duration: 0.5 });
+      }
+    };
 
     function render() {
       elements.statCount.textContent = state.aircraftMap.size;
@@ -612,14 +945,14 @@
       elements.grid.innerHTML = '';
       list.forEach(ac => {
         const card = document.createElement('div');
-        card.className = 'aircraft-card';
+        card.className = `aircraft-card ${state.activeHex === ac.hex ? 'highlighted' : ''}`;
         card.id = `ac-${ac.hex}`;
 
         card.addEventListener('click', () => {
-          if (state.map) {
-            state.map.setView([ac.lat, ac.lon], 9, { animate: true });
-            highlightCard(ac.hex);
-          }
+          selectPlane(ac.hex, false);
+          // Open map popup for selected plane
+          const marker = state.planeMarkers.get(ac.hex);
+          if (marker) marker.openPopup();
         });
 
         const photo = state.photoCache.get(ac.hex);
@@ -633,16 +966,28 @@
 
         const routeHtml = (ac.origin || ac.dest) ? `
           <div class="route-row">
-            <div>
-              <span class="airport-code">${ac.origin || '---'}</span>
+            <div class="route-airports">
+              <div class="airport-box">
+                <span class="airport-code">${ac.origin || '---'}</span>
+                <span class="airport-name">${ac.originName}</span>
+              </div>
               <span class="route-arrow">✈</span>
-              <span class="airport-code">${ac.dest || '---'}</span>
+              <div class="airport-box dest">
+                <span class="airport-code">${ac.dest || '---'}</span>
+                <span class="airport-name">${ac.destName}</span>
+              </div>
             </div>
-            <span class="flight-duration">TRACKED LIVE</span>
+            <div class="flight-duration-bar">
+              <span>Flight: <strong>${ac.elapsedText}</strong></span>
+              <span>Remaining: <strong>${ac.remainingText || 'Live En-Route'}</strong></span>
+            </div>
           </div>
         ` : `
           <div class="route-row">
-            <span style="color:var(--text-muted); font-size:0.75rem;">LOCAL / EN-ROUTE AIRSPACE</span>
+            <div style="color:var(--text-muted); font-size:0.75rem;">LOCAL / CIRCUIT PATTERN TRAFFIC</div>
+            <div class="flight-duration-bar">
+              <span>Time in Sector: <strong>${ac.elapsedText}</strong></span>
+            </div>
           </div>
         `;
 
